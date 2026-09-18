@@ -16,5 +16,5 @@ spec:
         name: maas-inference-cluster-a-provider
       targetModel: gpt-oss-20b
       apiFormat: openai-chat
-      path: /llm/gpt-oss-20b/v1/chat/completions
+      path: /v1/chat/completions
       weight: 50

@@ -1,4 +1,6 @@
 /.env
 /uv.lock
-/notebooks/*
-/.idea/*
+/.idea/
+.ipynb_checkpoints/
+**/__pycache__/
+/.junie/
