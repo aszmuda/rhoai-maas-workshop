@@ -56,7 +56,7 @@ fi
 # 3. Fail-fast validation of required secret variables
 REQUIRED_VARS=(
     "MAAS_RHDM_API_KEY"
-    "MAAS_GPT_OSS_20B_INFERENCE_TOKEN"
+    "MAAS_INFERENCE_CLUSTER_A_TOKEN"
 )
 
 MISSING_VARS=()
