@@ -1,0 +1,19 @@
+apiVersion: networking.istio.io/v1
+kind: DestinationRule
+metadata:
+  name: maas-inference-a-upstream-tls
+  namespace: openshift-ingress
+spec:
+  host: maas.apps.maas-inference-a.sandbox3315.opentlc.com
+  exportTo:
+    - "."
+  workloadSelector:
+    matchLabels:
+      gateway.networking.k8s.io/gateway-name: maas-default-gateway
+  trafficPolicy:
+    tls:
+      mode: SIMPLE
+      credentialName: maas-inference-a-upstream-ca
+      sni: maas.apps.maas-inference-a.sandbox3315.opentlc.com
+      subjectAltNames:
+        - maas.apps.maas-inference-a.sandbox3315.opentlc.com

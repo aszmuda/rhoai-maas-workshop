@@ -1,0 +1,20 @@
+apiVersion: inference.opendatahub.io/v1alpha1
+kind: ExternalModel
+metadata:
+  name: gpt-oss-20b
+  namespace: external-models
+spec:
+  modelName: gpt-oss-20b
+  externalProviderRefs:
+    - ref:
+        name: rhdp-external-provider
+      targetModel: gpt-oss-20b
+      apiFormat: openai-chat
+      path: /v1/chat/completions
+      weight: 50
+    - ref:
+        name: maas-inference-cluster-a-provider
+      targetModel: gpt-oss-20b
+      apiFormat: openai-chat
+      path: /llm/gpt-oss-20b/v1/chat/completions
+      weight: 50
