@@ -1,10 +1,10 @@
 apiVersion: maas.opendatahub.io/v1alpha1
 kind: MaaSSubscription
 metadata:
-  name: free-tier
+  name: gpt-oss-20b-free
   namespace: models-as-a-service
   annotations:
-    openshift.io/display-name: "Free Tier"
+    openshift.io/display-name: "gpt-oss-20b Free Tier"
     openshift.io/description: "Free tier: 10000 tokens/hour for all authenticated users"
 spec:
   owner:

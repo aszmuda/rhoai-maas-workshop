@@ -17,6 +17,8 @@ spec:
   lookupPolicy:
     local: true
 ---
+# Binary BuildConfig: build from local workshop directory via:
+#   oc start-build external-metering-simulator --from-dir=external-metering/simulator -n external-metering --follow
 apiVersion: build.openshift.io/v1
 kind: BuildConfig
 metadata:
@@ -28,12 +30,8 @@ metadata:
 spec:
   runPolicy: Serial
   source:
-    type: Git
-    binary: null
-    git:
-      uri: https://github.com/aszmuda/external-metering-simulator.git
-      ref: main
-    contextDir: simulator
+    type: Binary
+    binary: {}
   strategy:
     type: Docker
     dockerStrategy:

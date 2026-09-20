@@ -6,7 +6,7 @@ metadata:
   namespace: external-models
 spec:
   provider: openai
-  endpoint: maas-rhdp.apps.maas.redhatworkshops.io
+  endpoint: ${MAAS_RHDP_HOST}
   auth:
     type: apikey
     secretRef:
@@ -20,7 +20,7 @@ metadata:
   namespace: external-models
 spec:
   provider: openai
-  endpoint: maas.apps.maas-inference-a.sandbox3315.opentlc.com
+  endpoint: ${MAAS_INFERENCE_CLUSTER_A_HOST}
   auth:
     type: apikey
     secretRef:

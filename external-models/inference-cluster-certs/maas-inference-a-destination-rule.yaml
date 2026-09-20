@@ -4,7 +4,7 @@ metadata:
   name: maas-inference-a-upstream-tls
   namespace: openshift-ingress
 spec:
-  host: maas.apps.maas-inference-a.sandbox3315.opentlc.com
+  host: ${MAAS_INFERENCE_CLUSTER_A_HOST}
   exportTo:
     - "."
   workloadSelector:
@@ -14,6 +14,6 @@ spec:
     tls:
       mode: SIMPLE
       credentialName: maas-inference-a-upstream-ca
-      sni: maas.apps.maas-inference-a.sandbox3315.opentlc.com
+      sni: ${MAAS_INFERENCE_CLUSTER_A_HOST}
       subjectAltNames:
-        - maas.apps.maas-inference-a.sandbox3315.opentlc.com
+        - ${MAAS_INFERENCE_CLUSTER_A_HOST}

@@ -53,29 +53,7 @@ else
     echo "Warning: '$ENV_FILE' not found. Relying on current environment variables." >&2
 fi
 
-# 3. Fail-fast validation of required secret variables
-REQUIRED_VARS=(
-    "MAAS_RHDM_API_KEY"
-    "MAAS_INFERENCE_CLUSTER_A_TOKEN"
-)
-
-MISSING_VARS=()
-for var in "${REQUIRED_VARS[@]}"; do
-    if [ -z "${!var:-}" ]; then
-        MISSING_VARS+=("$var")
-    fi
-done
-
-if [ ${#MISSING_VARS[@]} -gt 0 ]; then
-    echo "Error: Missing required secret variable(s) for rendering:" >&2
-    for var in "${MISSING_VARS[@]}"; do
-        echo "  - $var" >&2
-    done
-    echo "Please set them in '$ENV_FILE' (see .env.example) or export them." >&2
-    exit 1
-fi
-
-# 4. Determine kustomize command (oc kustomize preferred)
+# 3. Determine kustomize and envsubst commands
 if command -v oc &>/dev/null; then
     KUSTOMIZE_CMD="oc kustomize"
 elif command -v kustomize &>/dev/null; then
@@ -90,16 +68,60 @@ if ! command -v envsubst &>/dev/null; then
     exit 1
 fi
 
-# 5. Format scoped substitution list
-VARS_ARGS=$(printf '${%s} ' "${REQUIRED_VARS[@]}")
+# 4. Render raw manifests from kustomize
+RAW_MANIFESTS=$($KUSTOMIZE_CMD "$TARGET_DIR")
 
-# 6. Render and optionally apply
+# 5. Contextual validation of required variables
+# Allow MAAS_RHDP_PROVIDER_HOST as alias for MAAS_RHDP_HOST
+export MAAS_RHDP_HOST="${MAAS_RHDP_HOST:-${MAAS_RHDP_PROVIDER_HOST:-}}"
+
+SUPPORTED_VARS=(
+    "MAAS_RHDM_API_KEY"
+    "MAAS_INFERENCE_CLUSTER_A_TOKEN"
+    "MAAS_INFERENCE_CLUSTER_A_HOST"
+    "MAAS_RHDP_HOST"
+)
+
+REQUIRED_VARS=()
+for var in "${SUPPORTED_VARS[@]}"; do
+    if grep -q -F "\${$var}" <<< "$RAW_MANIFESTS"; then
+        REQUIRED_VARS+=("$var")
+    fi
+done
+
+MISSING_VARS=()
+if [ ${#REQUIRED_VARS[@]} -gt 0 ]; then
+    for var in "${REQUIRED_VARS[@]}"; do
+        if [ -z "${!var:-}" ]; then
+            MISSING_VARS+=("$var")
+        fi
+    done
+fi
+
+if [ ${#MISSING_VARS[@]} -gt 0 ]; then
+    echo "Error: Missing required variable(s) for rendering '$TARGET_DIR':" >&2
+    for var in "${MISSING_VARS[@]}"; do
+        echo "  - $var" >&2
+    done
+    echo "Please set them in '$ENV_FILE' (see .env.example) or export them." >&2
+    exit 1
+fi
+
+# 6. Format scoped substitution list and render
+if [ ${#REQUIRED_VARS[@]} -gt 0 ]; then
+    VARS_ARGS=$(printf '${%s} ' "${REQUIRED_VARS[@]}")
+    RENDERED_MANIFESTS=$(printf '%s\n' "$RAW_MANIFESTS" | envsubst "$VARS_ARGS")
+else
+    RENDERED_MANIFESTS="$RAW_MANIFESTS"
+fi
+
+# 7. Output or apply
 if [ "$APPLY" = true ]; then
     if ! command -v oc &>/dev/null; then
         echo "Error: 'oc' command not found in PATH, required for --apply." >&2
         exit 1
     fi
-    $KUSTOMIZE_CMD "$TARGET_DIR" | envsubst "$VARS_ARGS" | oc apply -f -
+    printf '%s\n' "$RENDERED_MANIFESTS" | oc apply -f -
 else
-    $KUSTOMIZE_CMD "$TARGET_DIR" | envsubst "$VARS_ARGS"
+    printf '%s\n' "$RENDERED_MANIFESTS"
 fi
