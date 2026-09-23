@@ -1,0 +1,102 @@
+name: Verify Deployment
+
+# Tier 2 — cluster-dependent end-to-end verification.
+# Runs the full MaaS flow (auth → mint key → metered inference → revoke)
+# against a real RHOAI cluster. This can never run in per-PR CI: it needs
+# an OpenShift API server with Authorino, the gateway plugins, and the
+# metering simulator deployed.
+
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  e2e:
+    name: End-to-end MaaS flow
+    runs-on: ubuntu-latest
+    environment: cluster
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.14"
+
+      - name: Install OpenShift CLI
+        run: |
+          curl -fsSL -o oc.tar.gz \
+            "https://mirror.openshift.com/pub/openshift-v4/clients/ocp/stable/openshift-client-linux.tar.gz"
+          sudo tar -xzf oc.tar.gz -C /usr/local/bin oc
+          oc version --client
+
+      - name: Log in to cluster
+        # KUBECONFIG and credentials come from the 'cluster' environment
+        # secrets — never hardcode tokens here.
+        env:
+          OPENSHIFT_SERVER: ${{ secrets.OPENSHIFT_SERVER }}
+          OPENSHIFT_TOKEN: ${{ secrets.OPENSHIFT_TOKEN }}
+        run: |
+          oc login "$OPENSHIFT_SERVER" --token="$OPENSHIFT_TOKEN" --insecure-skip-tls-verify
+          oc whoami
+          oc project
+
+      - name: Preflight — check MaaS prerequisites
+        env:
+          MAAS_GATEWAY_URL: ${{ secrets.MAAS_GATEWAY_URL }}
+        run: |
+          set -euo pipefail
+
+          echo "== Simulator health =="
+          curl -fsS --max-time 10 "$MAAS_GATEWAY_URL/healthz" | head -c 400; echo
+
+          echo "== MaaS API health =="
+          curl -fsS --max-time 10 "$MAAS_GATEWAY_URL/maas-api/v1/healthz" | head -c 400; echo
+
+          echo "== Subscriptions =="
+          TOKEN="$(oc whoami -t)"
+          curl -fsS --max-time 10 \
+            -H "Authorization: Bearer $TOKEN" \
+            "$MAAS_GATEWAY_URL/maas-api/v1/subscriptions" | head -c 800; echo
+
+      - name: End-to-end — mint key, infer, revoke
+        env:
+          MAAS_GATEWAY_URL: ${{ secrets.MAAS_GATEWAY_URL }}
+          MAAS_SUBSCRIPTION: ${{ vars.MAAS_SUBSCRIPTION || 'gpt-oss-20b-free' }}
+          MAAS_MODEL: ${{ vars.MAAS_MODEL || 'gpt-oss-20b' }}
+        run: |
+          set -euo pipefail
+          BASE="$MAAS_GATEWAY_URL"
+          TOKEN="$(oc whoami -t)"
+
+          echo "== Mint API key bound to $MAAS_SUBSCRIPTION =="
+          KEY_JSON="$(curl -fsS --max-time 10 \
+            -H "Authorization: Bearer $TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "{\"subscription\": \"$MAAS_SUBSCRIPTION\"}" \
+            "$BASE/maas-api/v1/api-keys")"
+          echo "$KEY_JSON" | head -c 400; echo
+          API_KEY="$(printf '%s' "$KEY_JSON" | python3 -c 'import json,sys; print(json.load(sys.stdin)["apiKey"])')"
+          KEY_ID="$(printf '%s' "$KEY_JSON" | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
+
+          echo "== Metered inference against $MAAS_MODEL =="
+          HTTP_CODE="$(curl -sS --max-time 120 -o /tmp/inference.json -w '%{http_code}' \
+            -H "Authorization: Bearer $API_KEY" \
+            -H "Content-Type: application/json" \
+            -d '{"model": "'"$MAAS_MODEL"'", "messages": [{"role": "user", "content": "Say hello in one word."}], "max_tokens": 16}' \
+            "$BASE/v1/chat/completions")"
+          echo "HTTP $HTTP_CODE"
+          head -c 400 /tmp/inference.json; echo
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "Inference failed with HTTP $HTTP_CODE" >&2
+            exit 1
+          fi
+
+          echo "== Revoke API key $KEY_ID =="
+          curl -fsS --max-time 10 -X DELETE \
+            -H "Authorization: Bearer $TOKEN" \
+            "$BASE/maas-api/v1/api-keys/$KEY_ID"
+          echo
+          echo "End-to-end flow completed successfully."

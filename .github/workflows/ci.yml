@@ -1,0 +1,114 @@
+name: CI
+
+# Tier 1 — per-PR validation, no OpenShift cluster required.
+# Runs the Python unit test suite, kustomize rendering, and YAML linting
+# on every push/PR touching relevant paths.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    paths:
+      - "models/**"
+      - "external-models/**"
+      - "external-metering/**"
+      - "notebooks/**"
+      - "maas-api/**"
+      - "scripts/**"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".github/workflows/ci.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit-tests:
+    name: Unit tests (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.14"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Run unit tests
+        # The tests are pure unit tests: the simulator is exercised via an
+        # in-process ThreadingHTTPServer and every `oc` invocation in the
+        # notebook utils is mocked, so no cluster or kubeconfig is needed.
+        run: |
+          PYTHONPATH=notebooks:external-metering/simulator \
+            uv run python -m unittest \
+              external-metering/simulator/test_simulator.py \
+              external-metering/simulator/test_maas_notebook_utils.py
+
+  kustomize:
+    name: Kustomize build (${{ matrix.target }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - models/gpt-oss-20b
+          - models/gpt-oss-20b/llm
+          - models/gpt-oss-20b/maas
+          - models/qwen3-06b
+          - models/qwen3-06b/llm
+          - models/qwen3-06b/maas
+          - external-models/openai
+          - external-models/openai/model
+          - external-models/openai/maas
+          - external-models/inference-cluster-certs
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build manifests with kustomize
+        # `oc kustomize` is bundled with the oc CLI; use it to match the
+        # render.sh resolution order. Rendering is client-side only — the
+        # runner never talks to an API server.
+        run: |
+          if command -v oc >/dev/null 2>&1; then
+            oc kustomize "${{ matrix.target }}" > /dev/null
+          else
+            kustomize build "${{ matrix.target }}" > /dev/null
+          fi
+
+      - name: Verify render.sh (external-models/openai)
+        if: matrix.target == 'external-models/openai'
+        # render.sh needs envsubst plus the scoped MAAS_* variables; provide
+        # placeholder values from .env.example so the scoped envsubst path
+        # is exercised end-to-end without any cluster access.
+        env:
+          MAAS_INFERENCE_CLUSTER_A_HOST: maas.apps.maas-inference-a.example.com
+          MAAS_INFERENCE_CLUSTER_A_TOKEN: ci-placeholder-token
+          MAAS_RHDP_HOST: maas-rhdp.apps.maas.redhatworkshops.io
+          MAAS_RHDM_API_KEY: sk-ci-placeholder-key
+        run: |
+          sudo apt-get update -y && sudo apt-get install -y gettext
+          ./scripts/render.sh external-models/openai > /dev/null
+
+  yamllint:
+    name: YAML lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install yamllint
+        run: pipx install yamllint
+
+      - name: Lint YAML manifests
+        # maas-api/openapi3.yaml is excluded: it is a strictly read-only
+        # contract file and must never be reformatted or modified.
+        run: |
+          yamllint -d "{extends: default, rules: {line-length: disable, document-start: disable}}" \
+            models/ external-models/ external-metering/ scripts/
