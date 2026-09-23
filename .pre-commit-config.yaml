@@ -1,0 +1,34 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: trailing-whitespace
+        exclude: ^maas-api/openapi3\.yaml$
+      - id: end-of-file-fixer
+        exclude: ^maas-api/openapi3\.yaml$
+      - id: check-yaml
+        args: [--allow-multiple-documents]
+        exclude: ^maas-api/openapi3\.yaml$
+
+  - repo: https://github.com/adrienverge/yamllint
+    rev: v1.35.1
+    hooks:
+      - id: yamllint
+        args: [-d, "{extends: default, rules: {line-length: disable, document-start: disable, truthy: disable, indentation: {indent-sequences: whatever}}}"]
+        exclude: ^maas-api/openapi3\.yaml$
+
+  - repo: local
+    hooks:
+      - id: kustomize-validate
+        name: Validate Kustomize Manifests
+        entry: bash -c 'for d in models/gpt-oss-20b models/gpt-oss-20b/llm models/gpt-oss-20b/maas models/qwen3-06b models/qwen3-06b/llm models/qwen3-06b/maas external-models/openai external-models/openai/model external-models/openai/maas external-models/inference-cluster-certs; do if command -v oc >/dev/null 2>&1; then oc kustomize "$d" >/dev/null; else kustomize build "$d" >/dev/null; fi; done'
+        language: system
+        files: \.(ya?ml)$
+        pass_filenames: false
+
+      - id: unit-tests
+        name: Run Python Unit Tests
+        entry: bash -c 'PYTHONPATH=notebooks:external-metering/simulator uv run python -m unittest external-metering/simulator/test_simulator.py external-metering/simulator/test_maas_notebook_utils.py'
+        language: system
+        files: ^(external-metering/simulator/.*\.py|notebooks/.*\.py)$
+        pass_filenames: false

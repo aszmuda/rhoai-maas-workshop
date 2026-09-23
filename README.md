@@ -8,22 +8,22 @@ It illustrates how platform operators and consumers manage the full lifecycle of
 
 ## Key Components
 
-- **Model Deployments & Subscriptions (`models/`)**  
+- **Model Deployments & Subscriptions (`models/`)**
   Kustomize manifests for deploying LLMs (such as `gpt-oss-20b` and `qwen3-06b`) with associated OpenShift AI MaaS custom resources:
   - `MaaSModelRef`: Model registration and reference to inference services.
   - `MaaSAuthPolicy`: Group- and user-based access control.
   - `MaaSSubscription`: Tiered subscription definitions (e.g., Free vs. Premium tiers) configuring token rate limits and quotas.
 
-- **External Model Providers (`external-models/`)**  
+- **External Model Providers (`external-models/`)**
   Configurations to proxy and route inference traffic to external providers (such as OpenAI or remote inference clusters) using `ExternalModel` resources, credential secrets, and TLS destination rules.
 
-- **MaaS API Specification (`maas-api/`)**  
+- **MaaS API Specification (`maas-api/`)**
   OpenAPI 3.0 specification (`openapi3.yaml`) for the MaaS management and billing API, detailing endpoints for health checks, model discovery, subscription inspection, and API key management.
 
-- **External Metering Simulator (`external-metering/`)**  
+- **External Metering Simulator (`external-metering/`)**
   A lightweight, OpenMeter-compatible mock HTTP service and payload processing plugin manifests to simulate customer entitlements, quota enforcement, and per-inference balance deduction.
 
-- **Interactive Notebooks (`notebooks/`)**  
+- **Interactive Notebooks (`notebooks/`)**
   A step-by-step Jupyter notebook (`openshift-user-maas-interaction.ipynb`) and presentation utilities (`maas_notebook_utils.py`) walking through:
   1. Authenticating via OpenShift CLI (`oc`) tokens.
   2. Listing accessible subscriptions and models via the MaaS API.
@@ -31,7 +31,7 @@ It illustrates how platform operators and consumers manage the full lifecycle of
   4. Running model inference while observing real-time metering and entitlement checks.
   5. Revoking API keys.
 
-- **Helper Scripts (`scripts/`)**  
+- **Helper Scripts (`scripts/`)**
   `render.sh`: Utility script to render Kustomize manifests with scoped variable substitution via `envsubst` and optionally apply them via `oc apply`.
 
 ---
@@ -76,7 +76,7 @@ graph TB
         AUTH["Authorino<br/>(AuthN / AuthZ / TokenReview)"]
         MET["Metering Simulator<br/>(external-metering)"]
         GOV["MaaS Governance CRDs<br/>(MaaSModelRef, MaaSAuthPolicy, MaaSSubscription)"]
-        
+
         EXT_MODEL["ExternalModel (gpt-oss-20b)<br/>Weighted Routing Engine"]
 
         subgraph Providers["External Providers"]
@@ -127,7 +127,7 @@ sequenceDiagram
     Auth-->>GW: 200 OK (Inject X-MaaS-Subscription, Priority)
     GW->>Sim: Check Entitlement Balance (GET /entitlements/.../value)
     Sim-->>GW: 200 OK (hasAccess: true, balance: $1.00)
-    
+
     alt Route to Inference Cluster A (50% Weight)
         GW->>ExtModel: Forward Request
         ExtModel->>ProvA: Route to maas-inference-cluster-a-provider
@@ -262,7 +262,7 @@ Configure the MaaS gateway, metering simulator, and external proxy routing on th
 
 ## OpenAPI Contract & Source of Truth
 
-The OpenAPI 3.0 specification located at [`maas-api/openapi3.yaml`](maas-api/openapi3.yaml) serves as the authoritative, immutable source of truth for the MaaS billing and management API contracts. 
+The OpenAPI 3.0 specification located at [`maas-api/openapi3.yaml`](maas-api/openapi3.yaml) serves as the authoritative, immutable source of truth for the MaaS billing and management API contracts.
 
 - **Immutability Policy**: `maas-api/openapi3.yaml` is strictly read-only.
 - All client implementations, notebooks (`notebooks/openshift-user-maas-interaction.ipynb`), simulator endpoints (`external-metering/simulator/simulator.py`), and documentation adapt to conform to this contract.

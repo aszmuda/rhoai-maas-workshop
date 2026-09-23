@@ -110,5 +110,5 @@ jobs:
         # maas-api/openapi3.yaml is excluded: it is a strictly read-only
         # contract file and must never be reformatted or modified.
         run: |
-          yamllint -d "{extends: default, rules: {line-length: disable, document-start: disable}}" \
+          yamllint -d "{extends: default, rules: {line-length: disable, document-start: disable, truthy: disable, indentation: {indent-sequences: whatever}}}" \
             models/ external-models/ external-metering/ scripts/

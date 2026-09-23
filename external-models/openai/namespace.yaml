@@ -5,4 +5,3 @@ metadata:
   labels:
     opendatahub.io/generated-namespace: "true"
     maas.opendatahub.io/gateway-access: "true"
-  
